@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 var rootCmd = &cobra.Command{
 	Use:   "fusectx",
@@ -195,6 +195,119 @@ var buildAllCmd = &cobra.Command{
 	},
 }
 
+var cleanCmd = &cobra.Command{
+	Use:   "clean <source_file>",
+	Short: "Removes the output file generated from a specific source file",
+	Long:  "Removes the .ctx output file that corresponds to the specified .md source file (opposite of build)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sourceFile := args[0]
+		output, _ := cmd.Flags().GetString("output")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		silent, _ := cmd.Flags().GetBool("silent")
+
+		var targetFile string
+		if output != "" {
+			targetFile = output
+		} else {
+			if !strings.HasSuffix(sourceFile, ".md") {
+				return fmt.Errorf("source file must be a .md file when no output is specified")
+			}
+			targetFile = strings.TrimSuffix(sourceFile, ".md") + ".ctx"
+		}
+
+		if _, err := os.Stat(targetFile); os.IsNotExist(err) {
+			if !silent {
+				fmt.Printf("File %s does not exist\n", targetFile)
+			}
+			return nil
+		}
+
+		if dryRun {
+			fmt.Printf("Would remove: %s\n", targetFile)
+		} else {
+			err := os.Remove(targetFile)
+			if err != nil {
+				return fmt.Errorf("failed to remove %s: %w", targetFile, err)
+			}
+			if !silent {
+				fmt.Printf("Removed: %s\n", targetFile)
+			}
+		}
+
+		return nil
+	},
+}
+
+var cleanAllCmd = &cobra.Command{
+	Use:   "clean-all [directory]",
+	Short: "Removes all generated .ctx files",
+	Long:  "Scans a directory to find and remove all .ctx files that were generated from fusectx.md files (opposite of build-all)",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var targetDir string
+		if len(args) > 0 {
+			targetDir = args[0]
+		} else {
+			targetDir = "."
+		}
+
+		force, _ := cmd.Flags().GetBool("force")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		silent, _ := cmd.Flags().GetBool("silent")
+
+		ctxFiles, err := findCtxFiles(targetDir)
+		if err != nil {
+			return fmt.Errorf("failed to find .ctx files: %w", err)
+		}
+
+		if len(ctxFiles) == 0 {
+			if !silent {
+				fmt.Println("No .ctx files found")
+			}
+			return nil
+		}
+
+		var removedCount int
+		for _, file := range ctxFiles {
+			mdFile := strings.TrimSuffix(file, ".ctx") + ".md"
+			if !force {
+				if _, err := os.Stat(mdFile); os.IsNotExist(err) {
+					if !silent {
+						fmt.Printf("Skipping %s (no corresponding .md file found)\n", file)
+					}
+					continue
+				}
+			}
+
+			if dryRun {
+				fmt.Printf("Would remove: %s\n", file)
+				removedCount++
+			} else {
+				err := os.Remove(file)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to remove %s: %v\n", file, err)
+					continue
+				}
+				removedCount++
+				if !silent {
+					fmt.Printf("Removed: %s\n", file)
+				}
+			}
+		}
+
+		if !silent || dryRun {
+			if dryRun {
+				fmt.Printf("\nDry run: would remove %d file(s)\n", removedCount)
+			} else {
+				fmt.Printf("\nRemoved %d file(s)\n", removedCount)
+			}
+		}
+
+		return nil
+	},
+}
+
 func findFusectxFiles(dir string) ([]string, error) {
 	var files []string
 
@@ -204,6 +317,24 @@ func findFusectxFiles(dir string) ([]string, error) {
 		}
 
 		if !info.IsDir() && info.Name() == "fusectx.md" {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	return files, err
+}
+
+func findCtxFiles(dir string) ([]string, error) {
+	var files []string
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".ctx") {
 			files = append(files, path)
 		}
 
@@ -226,10 +357,20 @@ func init() {
 
 	buildAllCmd.Flags().BoolP("silent", "s", false, "Suppress output messages")
 
+	cleanCmd.Flags().StringP("output", "o", "", "Output file path (must match the -o flag used with build)")
+	cleanCmd.Flags().BoolP("dry-run", "d", false, "Show what would be removed without actually removing files")
+	cleanCmd.Flags().BoolP("silent", "s", false, "Suppress output messages")
+
+	cleanAllCmd.Flags().BoolP("force", "f", false, "Remove all .ctx files, even without corresponding .md files")
+	cleanAllCmd.Flags().BoolP("dry-run", "d", false, "Show what would be removed without actually removing files")
+	cleanAllCmd.Flags().BoolP("silent", "s", false, "Suppress output messages")
+
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(buildAllCmd)
+	rootCmd.AddCommand(cleanCmd)
+	rootCmd.AddCommand(cleanAllCmd)
 }
 
 func main() {
