@@ -7,7 +7,7 @@ A CLI tool that recursively resolves a dependency chain of text files and concat
 - **Hybrid Model**: Supports both inheritance (`extends`) and composition (`includes`)
 - **YAML Frontmatter**: Configuration directives defined in YAML frontmatter blocks
 - **Circular Dependency Detection**: Prevents infinite loops in dependency chains
-- **Multiple Commands**: Build, validate, initialize, and batch processing capabilities
+- **Multiple Commands**: Build, clean, validate, initialize, and batch processing capabilities
 
 ## Installation
 
@@ -26,11 +26,13 @@ go build -o fusectx cmd/fusectx/main.go
 ## Quick Start
 
 1. **Initialize a project**:
+
    ```bash
    fusectx init
    ```
 
 2. **Create a base configuration**:
+
    ```markdown
    ---
    # base.md
@@ -41,6 +43,7 @@ go build -o fusectx cmd/fusectx/main.go
    ```
 
 3. **Create a child configuration**:
+
    ```markdown
    ---
    extends: base.md
@@ -53,9 +56,24 @@ go build -o fusectx cmd/fusectx/main.go
    ```
 
 4. **Build the final context**:
+
    ```bash
    fusectx build child.md
    ```
+
+5. **Clean up generated files**:
+
+   ```bash
+   fusectx clean child.md  # removes single output file
+   fusectx clean-all       # removes all .ctx files
+   ```
+
+## Command Pairs
+
+| Build Command     | Clean Command     | Purpose                |
+|-------------------|-------------------|------------------------|
+| `build <file>`    | `clean <file>`    | Single file operations |
+| `build-all [dir]` | `clean-all [dir]` | Batch operations       |
 
 ## Resolution Order
 
@@ -76,10 +94,12 @@ fusectx build <source_file> [flags]
 ```
 
 **Flags:**
+
 - `-o, --output <path>`: Write output to file instead of stdout
 - `-s, --silent`: Suppress output messages
 
 **Examples:**
+
 ```bash
 # Output to stdout
 fusectx build config.md
@@ -91,6 +111,36 @@ fusectx build config.md -o context.txt
 fusectx build config.md -o context.txt -s
 ```
 
+### `fusectx clean`
+
+Removes the output file generated from a specific source file (opposite of `build`).
+
+```bash
+fusectx clean <source_file> [flags]
+```
+
+**Flags:**
+
+- `-o, --output <path>`: Output file path (must match the -o flag used with build)
+- `-d, --dry-run`: Show what would be removed without actually removing files
+- `-s, --silent`: Suppress output messages
+
+**Examples:**
+
+```bash
+# Remove default output file (replaces .md with .ctx)
+fusectx clean config.md  # removes config.ctx
+
+# Remove custom output file
+fusectx clean config.md -o context.txt
+
+# Preview what would be removed
+fusectx clean config.md --dry-run
+
+# Silent mode
+fusectx clean config.md -s
+```
+
 ### `fusectx init`
 
 Creates a boilerplate `fusectx.md` file to initialize a project.
@@ -100,11 +150,13 @@ fusectx init [directory] [flags]
 ```
 
 **Flags:**
+
 - `-e, --extends <path>`: Set extends path
 - `-i, --includes <path>`: Set includes paths (can be used multiple times)
 - `-f, --force`: Overwrite existing file
 
 **Examples:**
+
 ```bash
 # Initialize in current directory
 fusectx init
@@ -125,10 +177,12 @@ fusectx validate <source_file> [flags]
 ```
 
 **Flags:**
+
 - `--show-chain`: Display the dependency chain
 - `-q, --quiet`: Suppress output messages
 
 **Examples:**
+
 ```bash
 # Basic validation
 fusectx validate config.md
@@ -149,9 +203,11 @@ fusectx build-all [directory] [flags]
 ```
 
 **Flags:**
+
 - `-s, --silent`: Suppress output messages
 
 **Examples:**
+
 ```bash
 # Build all fusectx.md files in current directory
 fusectx build-all
@@ -162,6 +218,45 @@ fusectx build-all ./projects
 # Silent batch build
 fusectx build-all ./projects -s
 ```
+
+### `fusectx clean-all`
+
+Removes all generated `.ctx` files (opposite of `build-all`).
+
+```bash
+fusectx clean-all [directory] [flags]
+```
+
+**Flags:**
+
+- `-f, --force`: Remove all .ctx files, even without corresponding .md files
+- `-d, --dry-run`: Show what would be removed without actually removing files
+- `-s, --silent`: Suppress output messages
+
+**Examples:**
+
+```bash
+# Clean all .ctx files in current directory
+fusectx clean-all
+
+# Clean all .ctx files in specific directory
+fusectx clean-all ./projects
+
+# Preview what would be removed (dry run)
+fusectx clean-all --dry-run
+
+# Remove all .ctx files, including orphaned ones
+fusectx clean-all --force
+
+# Silent clean
+fusectx clean-all -s
+```
+
+**Behavior:**
+
+- By default, only removes `.ctx` files that have corresponding `.md` files
+- Use `--force` to remove all `.ctx` files regardless of corresponding `.md` files
+- Use `--dry-run` to preview what would be removed without actually deleting files
 
 ## File Format
 
@@ -190,6 +285,7 @@ Regular markdown content goes here.
 ### Basic Inheritance
 
 **base.md:**
+
 ```markdown
 ---
 ---
@@ -199,6 +295,7 @@ Common settings and documentation.
 ```
 
 **project.md:**
+
 ```markdown
 ---
 extends: base.md
@@ -211,6 +308,7 @@ Additional project-specific content.
 ### Complex Dependency Chain
 
 **root.md:**
+
 ```markdown
 ---
 ---
@@ -218,6 +316,7 @@ Additional project-specific content.
 ```
 
 **common.md:**
+
 ```markdown
 ---
 extends: root.md
@@ -226,6 +325,7 @@ extends: root.md
 ```
 
 **project.md:**
+
 ```markdown
 ---
 extends: common.md
